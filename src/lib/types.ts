@@ -31,6 +31,7 @@ export interface TranscriptionInfo {
 }
 
 export interface Manuscript {
+    id: string;
     title: string;
     record_id: string;
     metadata: Record<string, string | string[]>;
