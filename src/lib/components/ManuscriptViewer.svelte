@@ -1,4 +1,5 @@
 <!-- src/lib/components/ManuscriptViewer.svelte -->
+
 <script lang="ts">
     import { fade } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
@@ -72,9 +73,6 @@
     let manuscript: Manuscript | null = null;
     let manuscriptLoading = true;
     let manuscriptError: string | null = null;
-    
-    let pagesLoading = false;
-    let pagesError: string | null = null;
     let pages: PageData[] = [];
     let eventSource: EventSource | null = null;
     let generatingSummary = false;
@@ -104,30 +102,31 @@
             generatingSummary = false;
         }
     }
-    async function loadPages(manuscriptTitle: string) {
-        pagesLoading = true;
-        pagesError = null;
-        
+
+    async function loadTranscriptionData() {
         try {
             const response = await fetch(
-                `${apiUrl}/search/pages?manuscript=${encodeURIComponent(manuscriptTitle)}&limit=1000`
+                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/transcription`
             );
-            if (!response.ok) throw new Error(`Failed to fetch pages: ${response.status}`);
+            if (!response.ok) throw new Error(`Failed to fetch transcription: ${response.status}`);
             
-            const data = await response.json();
-            if (!Array.isArray(data.results)) throw new Error('Invalid page data received');
+            const transcriptionData = await response.json();
             
-              pages = data.results.sort((a: { page_number: string; }, b: { page_number: string; }) => {
-                    const pageA = a.page_number ? parseInt(a.page_number) : 0
-                    const pageB = b.page_number ? parseInt(b.page_number) : 0;
-                    return pageA - pageB
-                });
+            if (typeof transcriptionData.pages !== 'object' || transcriptionData.pages === null) {
+                throw new Error('Invalid transcription data: pages is not an object.');
+            }
+            
+            pages = Object.values(transcriptionData.pages) as PageData[];
+            pages.sort((a, b) => {
+                const pageA = a.page_number ? parseInt(a.page_number.toString()) : 0;
+                const pageB = b.page_number ? parseInt(b.page_number.toString()) : 0;
+                return pageA - pageB;
+            });
+
         } catch (e) {
-            pagesError = e instanceof Error ? e.message : 'Failed to load pages';
-            console.error('Page loading error:', e);
+            manuscriptError = e instanceof Error ? e.message : 'Failed to load transcription data';
+            console.error('Transcription loading error:', e);
             pages = [];
-        } finally {
-            pagesLoading = false;
         }
     }
 
@@ -146,7 +145,6 @@
                 await loadTranscriptionData();
             }
 
-            // Initialize SSE connection for status updates
             initializeStatusStream();
         } catch (e) {
             manuscriptError = e instanceof Error ? e.message : 'An unknown error occurred';
@@ -157,65 +155,30 @@
         }
     }
 
-    async function loadTranscriptionData() {
-        pagesLoading = true;
-        pagesError = null;
-        
-        try {
-            const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/transcription`
-            );
-            if (!response.ok) throw new Error(`Failed to fetch transcription: ${response.status}`);
-            
-             const transcriptionData = await response.json();
-            
-            if (typeof transcriptionData.pages !== 'object' || transcriptionData.pages === null) {
-                throw new Error('Invalid transcription data: pages is not an object.');
-            }
-            
-            // Convert dictionary of pages to array, with type assertion
-            pages = Object.values(transcriptionData.pages) as PageData[];
-
-            pages.sort((a, b) => {
-                    const pageA = a.page_number ? parseInt(a.page_number.toString()) : 0
-                    const pageB = b.page_number ? parseInt(b.page_number.toString()) : 0;
-                    return pageA - pageB
-                });
-
-
-        } catch (e) {
-            pagesError = e instanceof Error ? e.message : 'Failed to load pages';
-            console.error('Page loading error:', e);
-            pages = [];
-        } finally {
-            pagesLoading = false;
-        }
-    }
-
     function initializeStatusStream() {
-        // Clean up any existing connection
         eventSource?.close();
         
         eventSource = new EventSource(
             `${apiUrl}/manuscripts/${encodeURIComponent(title)}/status`
         );
 
-        eventSource.onmessage = (event) => {
+        eventSource.onmessage = async (event) => {
             try {
                 const status = JSON.parse(event.data);
                 if (manuscript) {
-                     let shouldUpdate = false;
+                    let shouldUpdate = false;
 
-                   if (status.successful_pages > 0 && (status.successful_pages !== (manuscript.transcription_info?.successful_pages ?? 0))) {
-                    shouldUpdate = true;
-                  }
-                   if (status.failed_pages && status.failed_pages.length !== (manuscript.transcription_info?.failed_pages?.length ?? 0)) {
-                    shouldUpdate = true;
-                   }
+                    if (status.successful_pages > 0 && 
+                        (status.successful_pages !== (manuscript.transcription_info?.successful_pages ?? 0))) {
+                        shouldUpdate = true;
+                    }
+                    if (status.failed_pages && 
+                        status.failed_pages.length !== (manuscript.transcription_info?.failed_pages?.length ?? 0)) {
+                        shouldUpdate = true;
+                    }
                     
-                    // Only trigger update if successful_pages or failed_pages have changed
-                    if(shouldUpdate){
-                       manuscript = {
+                    if (shouldUpdate) {
+                        manuscript = {
                             ...manuscript,
                             transcribed: status.successful_pages > 0,
                             transcription_info: {
@@ -225,15 +188,11 @@
                             }
                         };
 
-
-                    // If pages have been transcribed, reload the transcription data
-                    if (status.successful_pages > 0 ) {
-                        loadTranscriptionData();
+                        if (status.successful_pages > 0) {
+                            await loadTranscriptionData();
+                        }
                     }
-                }
-                    
 
-                    // Close SSE connection if transcription is complete
                     if (status.successful_pages >= manuscript.total_pages) {
                         eventSource?.close();
                         eventSource = null;
@@ -248,7 +207,6 @@
             console.error("SSE connection error:", error);
             eventSource?.close();
             eventSource = null;
-            // Attempt to reconnect after a delay
             setTimeout(initializeStatusStream, 5000);
         };
     }
@@ -264,7 +222,6 @@
             
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             
-            // Initialize SSE connection to start receiving updates
             initializeStatusStream();
         } catch (e) {
             manuscriptError = e instanceof Error ? e.message : 'Transcription failed';
@@ -328,19 +285,7 @@
                         generating={generatingSummary}
                         onGenerate={generateSummary}
                     />
-                    {#if pagesLoading}
-                        <div class="loading-inline">Loading pages...</div>
-                    {:else if pagesError}
-                        <div class="error-inline">
-                            Failed to load pages: {pagesError}
-                            <button 
-                                class="retry-button" 
-                                on:click={() => manuscript && loadPages(manuscript.title)}
-                            >
-                                Retry
-                            </button>
-                        </div>
-                    {:else if pages.length}
+                    {#if pages.length > 0}
                         <SearchPagesPanel {pages} {title} />
                     {/if}
                 {/if}
@@ -415,7 +360,6 @@
         <div class="error">Manuscript not found</div>
     {/if}
 </div>
-
 <style>
     .container {
         max-width: 1200px;
