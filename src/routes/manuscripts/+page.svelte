@@ -1,69 +1,38 @@
 <!-- src/routes/manuscripts/+page.svelte -->
 <script lang="ts">
-    import { onMount, onDestroy } from 'svelte';
-    import { writable, type Writable } from 'svelte/store';
-    import SearchPanel from '$lib/components/SearchPanel.svelte';
-    import ManuscriptTable from '$lib/components/ManuscriptTable.svelte';
-	import type { Manuscript } from '$lib/types';
-
-    const manuscriptsStore: Writable<Manuscript[]> = writable([]);
-    const displayedStore: Writable<Manuscript[]> = writable([]);
+    import { onMount } from 'svelte';
+    import type { ManuscriptListing } from '$lib/types/catalogue';
+	import CatalogueExplorer from '$lib/components/catalogue/CatalogueExplorer.svelte';
+    
+    let manuscripts: ManuscriptListing[] = [];
     let loading = true;
     let error: string | null = null;
-    
-    const apiUrl = 'http://127.0.0.1:5000';
-
+  
     onMount(async () => {
-        try {
-            const response = await fetch(`${apiUrl}/manuscripts`);
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            const data = await response.json();
-            manuscriptsStore.set(data);
-            displayedStore.set(data);
-        } catch (e) {
-            error = e instanceof Error ? e.message : 'An unknown error occurred';
-            console.error("Error fetching manuscripts:", error);
-        } finally {
-            loading = false;
-        }
+      try {
+        const response = await fetch('http://127.0.0.1:5000/manuscripts');
+        if (!response.ok) throw new Error('Failed to fetch manuscripts');
+        manuscripts = await response.json();
+      } catch (e) {
+        error = e instanceof Error ? e.message : 'An error occurred';
+      } finally {
+        loading = false;
+      }
     });
-
-    function handleSimilarityResults(event: CustomEvent) {
-        const { manuscripts, sourceTitle } = event.detail;
-        displayedStore.set(manuscripts);
-        // TODO: Update search panel to show similarity tag
-    }
-
-    $: manuscripts = $manuscriptsStore;
-    $: displayedManuscripts = $displayedStore;
-</script>
-
-<div class="container">
+  </script>
+  
+  <div class="space-y-6">
+    <h1 class="text-3xl font-serif">Manuscript Catalogue</h1>
+  
     {#if loading}
-        <p>Loading manuscripts...</p>
+      <div class="text-center py-12">
+        <span class="text-gray-600">Loading manuscripts...</span>
+      </div>
     {:else if error}
-        <p class="error">Error: {error}</p>
+      <div class="bg-red-50 text-red-600 p-4 rounded-md">
+        {error}
+      </div>
     {:else}
-        <SearchPanel
-            {manuscripts}
-            on:update={(event) => displayedStore.set(event.detail.manuscripts)}
-        />
-        <ManuscriptTable 
-            manuscripts={displayedManuscripts}
-            on:similarity={handleSimilarityResults}
-        />
+      <CatalogueExplorer {manuscripts} />
     {/if}
-</div>
-
-<style>
-    .container {
-        padding: 0 2rem;
-        margin: 0 auto;
-        max-width: 1200px;
-    }
-
-    .error {
-        color: red;
-        padding: 1em;
-    }
-</style>
+  </div>

@@ -1,7 +1,7 @@
 <!-- src/routes/+page.svelte -->
 <script lang="ts">
     import { onMount } from 'svelte';
-    import InfoBox from '$lib/components/InfoBox.svelte';
+    import InfoBox from '$lib/old_components/InfoBox.svelte';
   
     const apiUrl = 'http://127.0.0.1:5000';
   

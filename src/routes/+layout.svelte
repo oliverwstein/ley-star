@@ -1,6 +1,6 @@
 <!-- src/routes/+layout.svelte -->
 <script lang="ts">
-    import Banner from '$lib/components/Banner.svelte';
+    import Banner from '$lib/old_components/Banner.svelte';
   </script>
   
   <!-- Background Layer -->
