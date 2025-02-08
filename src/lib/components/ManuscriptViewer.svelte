@@ -1,73 +1,13 @@
 <!-- src/lib/components/ManuscriptViewer.svelte -->
-
 <script lang="ts">
     import { fade } from 'svelte/transition';
     import { onMount, onDestroy } from 'svelte';
     import SearchPagesPanel from './SearchPagesPanel.svelte';
     import ManuscriptSummary from './ManuscriptSummary.svelte';
+    import type { Manuscript, PageData, Summary, TableOfContentsEntry } from '$lib/types';
 
-    interface PhysicalDescription {
-        material: string;
-        dimensions: string;
-        condition: string;
-        layout: string;
-        script_type: string;
-        decoration: string;
-    }
-
-    interface Summary {
-        title: string;
-        alternative_titles: string[];
-        shelfmark: string;
-        repository: string;
-        date_range: [number, number];
-        languages: string[];
-        scribes: string[];
-        physical_description: PhysicalDescription;
-        contents_summary: string;
-        historical_context: string;
-        significance: string;
-        themes: string[];
-        provenance: string[];
-    }
-
-    interface TableOfContentsEntry {
-        title: string;
-        description: string;
-        page_number: number;
-        level: number;
-    }
-
-    interface TranscriptionInfo {
-        successful_pages: number;
-        failed_pages: string[];
-        last_updated: string;
-    }
-
-    interface PageData {
-        page_number: number;
-        transcription?: string;
-        revised_transcription?: string;
-        summary?: string;
-        keywords?: string[];
-        marginalia?: string[];
-        transcription_notes?: string;
-        content_notes?: string;
-    }
-
-    interface Manuscript {
-        title: string;
-        record_id: string;
-        metadata: Record<string, string | string[]>;
-        total_pages: number;
-        transcribed: boolean;
-        transcription_info?: TranscriptionInfo;
-        pages?: PageData[];
-        summary?: Summary;
-        table_of_contents?: TableOfContentsEntry[];
-    }
-
-    export let title: string;
+    export let id: string;
+    
     const apiUrl = 'http://127.0.0.1:5000';
     
     let manuscript: Manuscript | null = null;
@@ -76,6 +16,7 @@
     let pages: PageData[] = [];
     let eventSource: EventSource | null = null;
     let generatingSummary = false;
+    let transcriptionNotes = '';
 
     async function generateSummary() {
         if (!manuscript || generatingSummary) return;
@@ -83,7 +24,7 @@
         generatingSummary = true;
         try {
             const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(manuscript.title)}/generate-summary`,
+                `${apiUrl}/manuscripts/${manuscript.id}/summarize`,
                 { method: 'POST' }
             );
             
@@ -105,27 +46,25 @@
 
     async function loadTranscriptionData() {
         try {
-            const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/transcription`
-            );
-            if (!response.ok) throw new Error(`Failed to fetch transcription: ${response.status}`);
+            console.log(`Loading page data for manuscript ${id}`);
+            const response = await fetch(`${apiUrl}/manuscripts/${id}/pages`);
             
-            const transcriptionData = await response.json();
-            
-            if (typeof transcriptionData.pages !== 'object' || transcriptionData.pages === null) {
-                throw new Error('Invalid transcription data: pages is not an object.');
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Failed to fetch pages: ${response.status}, ${errorText}`);
             }
             
-            pages = Object.values(transcriptionData.pages) as PageData[];
-            pages.sort((a, b) => {
-                const pageA = a.page_number ? parseInt(a.page_number.toString()) : 0;
-                const pageB = b.page_number ? parseInt(b.page_number.toString()) : 0;
-                return pageA - pageB;
-            });
-
+            const pageData = await response.json();
+            
+            if (pageData) {
+                pages = Object.values(pageData);
+                pages.sort((a, b) => a.page_number - b.page_number);
+                console.log(`Loaded ${pages.length} pages`);
+                
+            }
         } catch (e) {
-            manuscriptError = e instanceof Error ? e.message : 'Failed to load transcription data';
-            console.error('Transcription loading error:', e);
+            manuscriptError = e instanceof Error ? e.message : 'Failed to load page data';
+            console.error('Page loading error:', e);
             pages = [];
         }
     }
@@ -135,17 +74,43 @@
         manuscriptError = null;
         
         try {
-            const response = await fetch(`${apiUrl}/manuscripts/${encodeURIComponent(title)}`);
+            // Get manuscript info
+            const response = await fetch(`${apiUrl}/manuscripts/${id}/info`);
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             
-            const manuscriptData = await response.json() as Manuscript;
+            const manuscriptData = await response.json();
             manuscript = manuscriptData;
 
-            if ((manuscriptData.transcription_info?.successful_pages ?? 0) > 0) {
-                await loadTranscriptionData();
+            // Get and set pages data
+            const pagesResponse = await fetch(`${apiUrl}/manuscripts/${id}/pages`);
+            if (pagesResponse.ok) {
+                const pageData = await pagesResponse.json();
+                
+                if (pageData && Object.keys(pageData).length > 0) {
+                    manuscript!.pages = pageData;
+                    // Transform the page data to include page numbers
+                    pages = Object.entries(pageData).map(([pageNum, data]) => ({
+                        ...data as PageData,
+                        page_number: parseInt(pageNum)
+                    }));
+                    pages.sort((a, b) => a.page_number - b.page_number);
+                    
+                    // Update transcription info based on actual pages
+                    if (!manuscript!.transcription_info) {
+                        manuscript!.transcription_info = {
+                            successful_pages: pages.length,
+                            failed_pages: [],
+                            last_updated: new Date().toISOString()
+                        };
+                    }
+                    manuscript!.transcribed = pages.length > 0;
+                } else {
+                    console.log('No page data received');
+                }
+            } else {
+                console.log('Pages request failed:', pagesResponse.status);
             }
 
-            initializeStatusStream();
         } catch (e) {
             manuscriptError = e instanceof Error ? e.message : 'An unknown error occurred';
             console.error("Error loading manuscript:", e);
@@ -156,46 +121,39 @@
     }
 
     function initializeStatusStream() {
-        eventSource?.close();
+        // Close any existing connection
+        if (eventSource) {
+            console.log('Closing existing status stream');
+            eventSource.close();
+            eventSource = null;
+        }
         
-        eventSource = new EventSource(
-            `${apiUrl}/manuscripts/${encodeURIComponent(title)}/status`
-        );
+        console.log(`Initializing status stream for manuscript ${id}`);
+        eventSource = new EventSource(`${apiUrl}/manuscripts/${id}/status`);
+
+        eventSource.onopen = () => {
+            console.log('Status stream connected');
+        };
 
         eventSource.onmessage = async (event) => {
             try {
                 const status = JSON.parse(event.data);
-                if (manuscript) {
-                    let shouldUpdate = false;
-
-                    if (status.successful_pages > 0 && 
-                        (status.successful_pages !== (manuscript.transcription_info?.successful_pages ?? 0))) {
-                        shouldUpdate = true;
-                    }
-                    if (status.failed_pages && 
-                        status.failed_pages.length !== (manuscript.transcription_info?.failed_pages?.length ?? 0)) {
-                        shouldUpdate = true;
-                    }
-                    
-                    if (shouldUpdate) {
-                        manuscript = {
-                            ...manuscript,
-                            transcribed: status.successful_pages > 0,
-                            transcription_info: {
-                                successful_pages: status.successful_pages,
-                                failed_pages: status.failed_pages || [],
-                                last_updated: new Date().toISOString()
-                            }
-                        };
-
-                        if (status.successful_pages > 0) {
-                            await loadTranscriptionData();
+                console.log('Received status update:', status);
+                
+                if (manuscript && status.successful_pages !== manuscript.transcription_info?.successful_pages) {
+                    console.log('Updating manuscript with new status');
+                    manuscript = {
+                        ...manuscript,
+                        transcribed: status.successful_pages > 0,
+                        transcription_info: {
+                            successful_pages: status.successful_pages,
+                            failed_pages: status.failed_pages || [],
+                            last_updated: new Date().toISOString()
                         }
-                    }
+                    };
 
-                    if (status.successful_pages >= manuscript.total_pages) {
-                        eventSource?.close();
-                        eventSource = null;
+                    if (status.successful_pages > 0) {
+                        await loadTranscriptionData();
                     }
                 }
             } catch (e) {
@@ -204,10 +162,15 @@
         };
 
         eventSource.onerror = (error) => {
-            console.error("SSE connection error:", error);
+            console.error('Status stream error:', error);
             eventSource?.close();
             eventSource = null;
-            setTimeout(initializeStatusStream, 5000);
+            
+            // Only retry if we still have a manuscript and it's still loading
+            if (manuscript && manuscriptLoading) {
+                console.log('Retrying status stream connection in 5 seconds');
+                setTimeout(initializeStatusStream, 5000);
+            }
         };
     }
 
@@ -216,16 +179,27 @@
         
         try {
             const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(manuscript.title)}/transcribe`,
-                { method: 'POST' }
+                `${apiUrl}/manuscripts/${manuscript.id}/transcribe`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ notes: transcriptionNotes || "" })
+                }
             );
             
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+            console.log('Transcription Response:', response);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Transcription Error Response:', errorText);
+                throw new Error(errorText || 'Failed to start transcription');
+            }
             
             initializeStatusStream();
         } catch (e) {
+            console.error('Full Transcription Error:', e);
             manuscriptError = e instanceof Error ? e.message : 'Transcription failed';
-            console.error("Transcription error:", e);
         }
     }
 
@@ -237,7 +211,7 @@
     }
 
     onMount(() => {
-        if (title) {
+        if (id) {
             loadManuscript();
         }
     });
@@ -268,7 +242,7 @@
                         <div class="record-id">Record ID: {manuscript.record_id}</div>
                     </div>
                     <a 
-                        href="/manuscripts/{encodeURIComponent(manuscript.title)}/pages" 
+                        href="/manuscripts/{manuscript.id}/pages" 
                         class="view-pages-button"
                     >
                         View Pages
@@ -277,16 +251,18 @@
             </header>
 
             <div class="content">
-                {#if (manuscript.transcription_info?.successful_pages ?? 0) > 0}
+                {#if manuscript}
                     <ManuscriptSummary
                         summary={manuscript.summary}
                         tableOfContents={manuscript.table_of_contents}
-                        {title}
+                        {id}
                         generating={generatingSummary}
                         onGenerate={generateSummary}
                     />
                     {#if pages.length > 0}
-                        <SearchPagesPanel {pages} {title} />
+                        <SearchPagesPanel 
+                        {pages} 
+                        id = {manuscript.id} />
                     {/if}
                 {/if}
 
@@ -316,7 +292,7 @@
                             <div class="status-item">
                                 <span class="label">Pages Transcribed</span>
                                 <span class="value">
-                                    {manuscript.transcription_info?.successful_pages ?? 0}/{manuscript.total_pages}
+                                    {pages.length}/{manuscript.total_pages}
                                 </span>
                             </div>
 
@@ -343,6 +319,16 @@
                             </div>
                         {/if}
 
+                        <div class="notes-input">
+                            <label for="transcription-notes">Notes for transcription (optional):</label>
+                            <textarea
+                                id="transcription-notes"
+                                bind:value={transcriptionNotes}
+                                placeholder="Enter any notes or instructions for transcription..."
+                                rows="3"
+                            ></textarea>
+                        </div>
+
                         {#if !manuscript.transcribed || 
                             (manuscript.transcription_info?.successful_pages ?? 0) < manuscript.total_pages}
                             <button 
@@ -360,6 +346,7 @@
         <div class="error">Manuscript not found</div>
     {/if}
 </div>
+
 <style>
     .container {
         max-width: 1200px;
@@ -373,7 +360,7 @@
         backdrop-filter: blur(4px);
         padding: 0.75rem 1rem;
         border-radius: 0.5rem;
-    border: 1px solid rgba(229, 231, 235, 0.8);
+        border: 1px solid rgba(229, 231, 235, 0.8);
     }
 
     .breadcrumbs a {
@@ -510,6 +497,26 @@
         color: #e53e3e;
     }
 
+    .notes-input {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .notes-input label {
+        font-size: 0.875rem;
+        color: #4b5563;
+    }
+
+    .notes-input textarea {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        resize: vertical;
+        font-family: inherit;
+    }
+
     .transcribe-button {
         margin-top: 1rem;
         padding: 0.5rem 1rem;
@@ -522,7 +529,23 @@
         transition: background-color 0.2s;
     }
 
-    .transcribe-button:hover {
+    .transcribe-button {
+        padding: 0.75rem 1rem;
+        background: #4a9eff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        font-weight: 500;
+    }
+
+    .transcribe-button:hover:not(:disabled) {
         background: #3182ce;
+    }
+
+    .transcribe-button:disabled {
+        background: #9ca3af;
+        cursor: not-allowed;
     }
 </style>

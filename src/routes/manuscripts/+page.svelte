@@ -4,10 +4,10 @@
     import { writable, type Writable } from 'svelte/store';
     import SearchPanel from '$lib/components/SearchPanel.svelte';
     import ManuscriptTable from '$lib/components/ManuscriptTable.svelte';
-	import type { Manuscript } from '$lib/types';
+	import type { Manuscript, ManuscriptListing } from '$lib/types';
 
-    const manuscriptsStore: Writable<Manuscript[]> = writable([]);
-    const displayedStore: Writable<Manuscript[]> = writable([]);
+    const manuscriptsStore: Writable<ManuscriptListing[]> = writable([]);
+    const displayedStore: Writable<ManuscriptListing[]> = writable([]);
     let loading = true;
     let error: string | null = null;
     

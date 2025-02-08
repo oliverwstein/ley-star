@@ -1,25 +1,16 @@
 <!-- src/lib/components/ManuscriptTable.svelte -->
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte';
-    
-    interface Manuscript {
-        title: string;
-        total_pages: number;
-    }
+	import type { ManuscriptListing } from "$lib/types";
 
-    export let manuscripts: Manuscript[] = [];
     
     type SortField = 'title' | 'pages';
     type SortDirection = 'ascending' | 'descending';
 
-    const dispatch = createEventDispatcher();
-    const apiUrl = 'http://127.0.0.1:5000';
+    export let manuscripts: ManuscriptListing[] = [];
 
     let titleFilter = '';
     let sortField: SortField | null = null;
     let sortDirection: SortDirection = 'ascending';
-    let similarityLimit = 5;
-    let activeSimilarityTitle: string | null = null; // Use a string or null to represent the active manuscript for similarity
 
     $: filteredManuscripts = titleFilter
         ? manuscripts.filter(m => 
@@ -44,30 +35,9 @@
             } else if (typeof valueA === 'number' && typeof valueB === 'number') {
                 return (valueA - valueB) * modifier;
             } else {
-                return 0; // Handle edge cases (though they shouldn't happen with this type definition)
+                return 0;
             }
-
         });
-    }
-
-    async function findSimilarManuscripts(title: string) {
-        try {
-            const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/similar?limit=${similarityLimit}`
-            );
-            if (!response.ok) throw new Error('Failed to find similar manuscripts');
-            const data = await response.json();
-            
-            // Dispatch event to update search with similarity results
-            dispatch('similarity', {
-                manuscripts: data.similar_manuscripts,
-                sourceTitle: title
-            });
-            
-            activeSimilarityTitle = null; // Close the input after finding similar manuscripts
-        } catch (error) {
-            console.error('Error finding similar manuscripts:', error);
-        }
     }
 </script>
 
@@ -98,7 +68,6 @@
                 >
                     Pages {sortField === 'pages' ? (sortDirection === 'ascending' ? '↑' : '↓') : ''}
                 </th>
-                <th role="columnheader">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -106,53 +75,20 @@
                 <tr class="row">
                     <td class="title">
                         <a 
-                            href="/manuscripts/{encodeURIComponent(manuscript.title)}" 
+                            href="/manuscripts/{manuscript.id}" 
                             class="hover:text-blue-600 hover:underline"
                         >
                             {manuscript.title}
                         </a>
                     </td>
                     <td class="pages">
-                        {manuscript.total_pages}
-                    </td>
-                    <td class="actions">
-                        {#if activeSimilarityTitle === manuscript.title}
-                            <div class="similarity-input">
-                                <input
-                                    type="number"
-                                    bind:value={similarityLimit}
-                                    min="1"
-                                    max="20"
-                                    class="number-input"
-                                />
-                                <button
-                                    class="confirm-button"
-                                    on:click={() => findSimilarManuscripts(manuscript.title)}
-                                >
-                                    Find
-                                </button>
-                                <button
-                                    class="cancel-button"
-                                    on:click={() => activeSimilarityTitle = null}
-                                >
-                                    Cancel
-                                </button>
-                            </div>
-                        {:else}
-                            <button
-                                class="similar-button"
-                                on:click={() => activeSimilarityTitle = manuscript.title}
-                            >
-                                Find Similar Manuscripts
-                            </button>
-                        {/if}
+                        {manuscript.transcribed_pages}/{manuscript.total_pages}
                     </td>
                 </tr>
             {/each}
         </tbody>
     </table>
 </div>
-
 
 <style>
     .table-wrapper {
@@ -208,43 +144,5 @@
 
     th.sortable:hover {
         color: #4a9eff;
-    }
-
-    .similar-button,
-    .confirm-button {
-        padding: 0.3em 0.8em;
-        background: #4a9eff;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-    }
-
-    .cancel-button {
-        padding: 0.3em 0.8em;
-        background: #9ca3af;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        margin-left: 0.5rem;
-    }
-
-    .similar-button:hover,
-    .confirm-button:hover {
-        background: #3182ce;
-    }
-
-    .similarity-input {
-        display: flex;
-        gap: 0.5rem;
-        align-items: center;
-    }
-
-    .number-input {
-        width: 4rem;
-        padding: 0.3em;
-        border: 1px solid #e2e8f0;
-        border-radius: 4px;
     }
 </style>

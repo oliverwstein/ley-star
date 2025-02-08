@@ -3,7 +3,7 @@
     import { page } from '$app/stores';
     import ManuscriptViewer from '$lib/components/ManuscriptViewer.svelte';
     
-    const title = $page.params.title;
+    const id = $page.params.id;
 </script>
 
-<ManuscriptViewer {title} />
+<ManuscriptViewer {id} />

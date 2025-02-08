@@ -4,6 +4,7 @@
     import PageViewer from '$lib/components/PageViewer.svelte';
     
     const title = $page.params.title;
+    const id = $page.params.id;
 </script>
 
-<PageViewer {title} />
+<PageViewer {title} {id} />

@@ -5,17 +5,11 @@
     import { page } from '$app/stores';
     import { goto } from '$app/navigation'; 
     import PageInfo from './PageInfo.svelte';
- 
-    interface PageData {
-        transcription?: string;
-        revised_transcription?: string;
-        summary?: string;
-        keywords?: string[];
-        marginalia?: string[];
-        confidence?: number;
-    }
+	import type { PageData } from '$lib/types';
+
  
     export let title: string;
+    export let id: string;
  
     const apiUrl = 'http://127.0.0.1:5000';
     let totalPages = 0;
@@ -26,14 +20,15 @@
  
     $: currentPage = parseInt($page.url.searchParams.get('page') || '1');
     $: inputPage = currentPage.toString();
-    $: imageUrl = `${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/${currentPage}/image`;
+    $: imageUrl = `${apiUrl}/manuscripts/${id}/pages/${currentPage}/image`;
  
     onMount(async () => {
         try {
-            const response = await fetch(`${apiUrl}/manuscripts/${encodeURIComponent(title)}`);
+            const response = await fetch(`${apiUrl}/manuscripts/${id}/info`);
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             const data = await response.json();
             totalPages = data.total_pages;
+            title = data.title;
  
             const urlPage = parseInt($page.url.searchParams.get('page') || '1');
             if (urlPage >= 1 && urlPage <= totalPages) {
@@ -49,14 +44,14 @@
     async function updatePage(newPage: number) {
         if (newPage < 1 || newPage > totalPages) return;
         
-        goto(`/manuscripts/${encodeURIComponent(title)}/pages?page=${newPage}`, {
+        goto(`/manuscripts/${id}/pages?page=${newPage}`, {
             keepFocus: true,
             replaceState: true
         });
 
         try {
             const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/${newPage}`
+                `${apiUrl}/manuscripts/${id}/pages/${newPage}`
             );
             if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
             pageData = await response.json();
@@ -88,7 +83,7 @@
  
  <div class="page-viewer">
     <nav class="navigation">
-        <a href="/manuscripts/{encodeURIComponent(title)}" class="back-button">
+        <a href="/manuscripts/{id}" class="back-button">
             ← Back to Manuscript
         </a>
         <div class="page-controls">
@@ -107,11 +102,9 @@
                 Next
             </button>
         </div>
-        {#if pageData}
-            <button class="info-button" on:click={() => showInfo = !showInfo}>
-                {showInfo ? 'Hide' : 'Show'} Page Info
-            </button>
-        {/if}
+        <button class="info-button" on:click={() => showInfo = !showInfo}>
+            {showInfo ? 'Hide' : 'Show'} Page Info
+        </button>
     </nav>
  
     <div class="content">
@@ -130,8 +123,12 @@
         </div>
     </div>
  
-    {#if showInfo && pageData}
-        <PageInfo {pageData} {title} onClose={() => showInfo = false} />
+    {#if showInfo}
+        <PageInfo 
+            pageData={pageData || { page_number: currentPage }}
+            {id}
+            onClose={() => showInfo = false} 
+        />
     {/if}
  </div>
 <style>

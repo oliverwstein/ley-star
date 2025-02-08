@@ -4,21 +4,11 @@
     import PageTable from './PageTable.svelte';
     import { onMount } from 'svelte';
     import { writable } from 'svelte/store';
-    import { ManuscriptSearchEngine } from '$lib/utils/ManuscriptSearch';
-
-    interface PageData {
-        page_number: number;
-        transcription?: string;
-        revised_transcription?: string;
-        summary?: string;
-        keywords?: string[];
-        marginalia?: string[];
-        transcription_notes?: string;
-        content_notes?: string;
-    }
+    import { PageSearch } from '$lib/utils/PageSearch';
+	import type { PageData } from '$lib/types';
 
     export let pages: PageData[] = [];
-    export let title: string;
+    export let id: string;
 
     let searchQuery = '';
     let showHelp = false;
@@ -33,7 +23,7 @@
         weightedFields: true
     });
 
-    const helpText = ManuscriptSearchEngine.getSearchHelp();
+    const helpText = PageSearch.getSearchHelp();
 
     function performSearch() {
         if (!searchQuery.trim()) {
@@ -44,7 +34,7 @@
 
         try {
             isSearching = true;
-            const results = ManuscriptSearchEngine.search(pages, searchQuery, $searchOptions);
+            const results = PageSearch.search(pages, searchQuery, $searchOptions);
             displayedPages = results;
             
             statusMessage = `Found ${results.length} matching ${results.length === 1 ? 'page' : 'pages'}`;
@@ -220,7 +210,7 @@
 
     <div class="results-container" class:has-results={displayedPages.length > 0}>
         <PageTable 
-            {title}
+            {id}
             pages={displayedPages}
             on:keywordClick={handleKeywordClick}
         />

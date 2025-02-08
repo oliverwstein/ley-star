@@ -9,6 +9,7 @@ export interface PhysicalDescription {
 }
 
 export interface Summary {
+    id: string;
     title: string;
     alternative_titles: string[];
     shelfmark: string;
@@ -31,6 +32,7 @@ export interface TranscriptionInfo {
 }
 
 export interface Manuscript {
+    id: string;
     title: string;
     record_id: string;
     metadata: Record<string, string | string[]>;
@@ -42,8 +44,16 @@ export interface Manuscript {
     table_of_contents?: TableOfContentsEntry[];
 }
 
+export interface ManuscriptListing {
+    id: string;
+    title: string;
+    total_pages: number;
+    transcribed_pages: number;
+    last_updated: string | null;
+}
+
 export interface PageData {
-    page_number?: number;
+    page_number: number;
     transcription?: string;
     revised_transcription?: string;
     summary?: string;
@@ -51,6 +61,7 @@ export interface PageData {
     marginalia?: string[];
     transcription_notes?: string;
     content_notes?: string;
+    confidence?: number;
 }
 
 export interface TableOfContentsEntry {

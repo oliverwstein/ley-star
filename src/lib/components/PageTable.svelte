@@ -1,17 +1,10 @@
 <!-- src/lib/components/PageTable.svelte -->
 <script lang="ts">
+    import type { PageData } from '$lib/types';
     import { createEventDispatcher } from 'svelte';
+    import { safeMarkdown } from '$lib/utils/markdown';
 
-    interface PageData {
-        page_number: number;
-        transcription?: string;
-        revised_transcription?: string;
-        summary?: string;
-        keywords?: string[];
-        marginalia?: string[];
-    }
-
-    export let title: string;
+    export let id: string;
     export let pages: PageData[] = [];
 
     const dispatch = createEventDispatcher();
@@ -32,6 +25,11 @@
     function handleKeywordClick(keyword: string) {
         dispatch('keywordClick', keyword);
     }
+
+    // Sort pages by page number to ensure consistent display order
+    $: sortedPages = [...pages].sort((a, b) => 
+        (a.page_number || 0) - (b.page_number || 0)
+    );
 </script>
 
 <div class="table-container">
@@ -45,20 +43,22 @@
             </tr>
         </thead>
         <tbody>
-            {#each pages as page}
+            {#each sortedPages as page}
                 <tr>
                     <td>
                         <a 
-                            href="/manuscripts/{encodeURIComponent(title)}/pages?page={page.page_number}"
+                            href="/manuscripts/{encodeURIComponent(id)}/pages?page={page.page_number}"
                             class="page-link"
                         >
                             {page.page_number}
                         </a>
                     </td>
-                    <td>
-                        {truncateText(page.revised_transcription || page.transcription, transcriptPreviewLength)}
+                    <td class="transcript-content">
+                        {@html safeMarkdown(truncateText(page.revised_transcription || page.transcription, transcriptPreviewLength))}
                     </td>
-                    <td>{truncateText(page.summary, summaryLength)}</td>
+                    <td class="summary-content">
+                        {@html safeMarkdown(truncateText(page.summary, summaryLength))}
+                    </td>
                     <td>
                         <div class="keywords">
                             {#each (page.keywords || []).slice(0, 3) as keyword}
@@ -66,7 +66,7 @@
                                     class="keyword"
                                     on:click={() => handleKeywordClick(keyword)}
                                 >
-                                    {keyword}
+                                    {@html safeMarkdown(keyword)}
                                 </button>
                             {/each}
                             {#if (page.keywords?.length ?? 0) > 3}
@@ -112,6 +112,31 @@
         padding: 0.75rem;
         border-bottom: 1px solid #e2e8f0;
         vertical-align: top;
+    }
+
+    .transcript-content :global(p),
+    .summary-content :global(p) {
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .transcript-content :global(em),
+    .summary-content :global(em) {
+        font-style: italic;
+    }
+
+    .transcript-content :global(strong),
+    .summary-content :global(strong) {
+        font-weight: 600;
+    }
+
+    .transcript-content :global(code),
+    .summary-content :global(code) {
+        background: #f3f4f6;
+        padding: 0.1em 0.3em;
+        border-radius: 3px;
+        font-size: 0.875em;
+        font-family: ui-monospace, monospace;
     }
 
     .page-col {
@@ -160,6 +185,16 @@
 
     .keyword:hover {
         background: #cbd5e1;
+    }
+
+    .keyword :global(em) {
+        font-style: italic;
+    }
+
+    .keyword :global(code) {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 0.1em 0.2em;
+        border-radius: 2px;
     }
 
     .more {

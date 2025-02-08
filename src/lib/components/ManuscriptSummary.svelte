@@ -1,40 +1,11 @@
 <!-- src/lib/components/ManuscriptSummary.svelte -->
 <script lang="ts">
-    interface PhysicalDescription {
-        material: string;
-        dimensions: string;
-        condition: string;
-        layout: string;
-        script_type: string;
-        decoration: string;
-    }
-
-    interface Summary {
-        title: string;
-        alternative_titles: string[];
-        shelfmark: string;
-        repository: string;
-        date_range: [number, number];
-        languages: string[];
-        scribes: string[];
-        physical_description: PhysicalDescription;
-        contents_summary: string;
-        historical_context: string;
-        significance: string;
-        themes: string[];
-        provenance: string[];
-    }
-
-    interface TableEntry {
-        title: string;
-        description: string;
-        page_number: number;
-        level: number;
-    }
+    import type { Summary, TableOfContentsEntry } from "$lib/types";
+	import { safeMarkdown } from "$lib/utils/markdown";
 
     export let summary: Summary | null = null;
-    export let tableOfContents: TableEntry[] = [];
-    export let title: string;
+    export let tableOfContents: TableOfContentsEntry[] = [];
+    export let id: string;
     export let generating: boolean = false;
     export let onGenerate: () => void;
 
@@ -56,23 +27,23 @@
                     <div class="main-metadata">
                         {#if summary.alternative_titles.length > 0}
                             <div class="alt-titles">
-                                Also known as: {summary.alternative_titles.join(', ')}
+                                Also known as: {@html safeMarkdown(summary.alternative_titles.join(', '))}
                             </div>
                         {/if}
                         <div class="identifier">
-                            <span class="shelfmark">{summary.shelfmark}</span>
+                            <span class="shelfmark">{@html safeMarkdown(summary.shelfmark)}</span>
                             <span class="separator">•</span>
-                            <span class="repository">{summary.repository}</span>
+                            <span class="repository">{@html safeMarkdown(summary.repository)}</span>
                         </div>
-                        <p class="contents-summary">
-                            {@html summary.contents_summary.replace(/\*(.*?)\*/g, '<em>$1</em>')}
-                        </p>
+                        <div class="contents-summary">
+                            {@html safeMarkdown(summary.contents_summary)}
+                        </div>
                     </div>
 
                     <div class="details-grid">
                         <div class="page-preview">
                             <img 
-                                src={`${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/1/image`}
+                                src={`${apiUrl}/manuscripts/${id}/pages/1/image`}
                                 alt="First page"
                                 loading="lazy"
                             />
@@ -83,37 +54,37 @@
                             {#if summary.physical_description.material}
                                 <div class="detail-item">
                                     <span class="label">Material:</span>
-                                    <span>{summary.physical_description.material}</span>
+                                    <span>{@html safeMarkdown(summary.physical_description.material)}</span>
                                 </div>
                             {/if}
                             {#if summary.physical_description.dimensions}
                                 <div class="detail-item">
                                     <span class="label">Dimensions:</span>
-                                    <span>{summary.physical_description.dimensions}</span>
+                                    <span>{@html safeMarkdown(summary.physical_description.dimensions)}</span>
                                 </div>
                             {/if}
                             {#if summary.physical_description.layout}
                                 <div class="detail-item">
                                     <span class="label">Layout:</span>
-                                    <span>{summary.physical_description.layout}</span>
+                                    <span>{@html safeMarkdown(summary.physical_description.layout)}</span>
                                 </div>
                             {/if}
                             {#if summary.physical_description.script_type}
                                 <div class="detail-item">
                                     <span class="label">Script:</span>
-                                    <span>{summary.physical_description.script_type}</span>
+                                    <span>{@html safeMarkdown(summary.physical_description.script_type)}</span>
                                 </div>
                             {/if}
                             {#if summary.physical_description.decoration}
                                 <div class="detail-item">
                                     <span class="label">Decoration:</span>
-                                    <span>{summary.physical_description.decoration}</span>
+                                    <span>{@html safeMarkdown(summary.physical_description.decoration)}</span>
                                 </div>
                             {/if}
                             {#if summary.physical_description.condition}
                                 <div class="detail-item">
                                     <span class="label">Condition:</span>
-                                    <span>{summary.physical_description.condition}</span>
+                                    <span>{@html safeMarkdown(summary.physical_description.condition)}</span>
                                 </div>
                             {/if}
                         </div>
@@ -128,13 +99,13 @@
                             {#if summary.languages.length}
                                 <div class="info-item">
                                     <span class="label">Languages:</span>
-                                    <span>{summary.languages.join(', ')}</span>
+                                    <span>{@html safeMarkdown(summary.languages.join(', '))}</span>
                                 </div>
                             {/if}
                             {#if summary.scribes.length}
                                 <div class="info-item">
                                     <span class="label">Scribes:</span>
-                                    <span>{summary.scribes.join(', ')}</span>
+                                    <span>{@html safeMarkdown(summary.scribes.join(', '))}</span>
                                 </div>
                             {/if}
                         </div>
@@ -142,14 +113,18 @@
                         {#if summary.historical_context}
                             <div class="context">
                                 <h3>Historical Context</h3>
-                                <p>{summary.historical_context}</p>
+                                <div class="context-content">
+                                    {@html safeMarkdown(summary.historical_context)}
+                                </div>
                             </div>
                         {/if}
 
                         {#if summary.significance}
                             <div class="context">
                                 <h3>Significance</h3>
-                                <p>{summary.significance}</p>
+                                <div class="context-content">
+                                    {@html safeMarkdown(summary.significance)}
+                                </div>
                             </div>
                         {/if}
 
@@ -160,7 +135,7 @@
                                         <h3>Themes</h3>
                                         <div class="theme-tags">
                                             {#each summary.themes as theme}
-                                                <span class="theme-tag">{theme}</span>
+                                                <span class="theme-tag">{@html safeMarkdown(theme)}</span>
                                             {/each}
                                         </div>
                                     </div>
@@ -171,7 +146,7 @@
                                         <h3>Provenance</h3>
                                         <div class="provenance-list">
                                             {#each summary.provenance as entry}
-                                                <span class="provenance-entry">{entry}</span>
+                                                <span class="provenance-entry">{@html safeMarkdown(entry)}</span>
                                             {/each}
                                         </div>
                                     </div>
@@ -188,12 +163,12 @@
                     {#each tableOfContents as entry}
                         <div class="toc-entry" class:indent-1={entry.level === 1} class:indent-2={entry.level === 2} class:indent-3={entry.level === 3}>
                             <a 
-                                href="/manuscripts/{encodeURIComponent(title)}/pages?page={entry.page_number}"
+                                href="/manuscripts/{id}/pages?page={entry.page_number}"
                                 class="page-link"
                             >
                                 <div class="thumbnail">
                                     <img 
-                                        src={`${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/${entry.page_number}/image`}
+                                        src={`${apiUrl}/manuscripts/${id}/pages/${entry.page_number}/image`}
                                         alt={`Page ${entry.page_number}`}
                                         loading="lazy"
                                     />
@@ -202,13 +177,15 @@
                             </a>
                             <div class="entry-content">
                                 <a 
-                                    href="/manuscripts/{encodeURIComponent(title)}/pages?page={entry.page_number}"
+                                    href="/manuscripts/{id}/pages?page={entry.page_number}"
                                     class="entry-title"
                                 >
-                                    {entry.title}
+                                    {@html safeMarkdown(entry.title)}
                                 </a>
                                 {#if entry.description}
-                                    <p class="description">{entry.description}</p>
+                                    <div class="description">
+                                        {@html safeMarkdown(entry.description)}
+                                    </div>
                                 {/if}
                             </div>
                         </div>
@@ -338,12 +315,6 @@
 
     .context {
         margin-bottom: 1.5rem;
-    }
-
-    .context p {
-        font-size: 1rem;
-        line-height: 1.6;
-        color: #374151;
     }
 
     .tags-section {

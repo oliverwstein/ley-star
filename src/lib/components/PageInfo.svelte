@@ -2,25 +2,18 @@
 <script lang="ts">
     import { fade, fly } from 'svelte/transition';
     import { onDestroy } from 'svelte';
-    
-    interface PageData {
-        transcription?: string;
-        revised_transcription?: string;
-        summary?: string;
-        keywords?: string[];
-        marginalia?: string[];
-        confidence?: number;
-        page_number?: number;
-    }
+    import { safeMarkdown } from '$lib/utils/markdown';
+    import type { PageData } from '$lib/types';
 
     export let pageData: PageData;
     export let onClose: () => void;
-    export let title: string;
+    export let id: string;
 
     let showRevised = false;
-    let isRetranscribing = false;
-    let retranscribeError: string | null = null;
+    let isTranscribing = false;
+    let transcribeError: string | null = null;
     let eventSource: EventSource | null = null;
+    let transcriptionNotes = '';
 
     const apiUrl = 'http://127.0.0.1:5000';
 
@@ -52,7 +45,7 @@
     async function fetchUpdatedPageData(): Promise<PageData | null> {
         try {
             const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/${pageData.page_number}`
+                `${apiUrl}/manuscripts/${id}/pages/${pageData.page_number}`
             );
             if (!response.ok) throw new Error('Failed to fetch updated page data');
             return await response.json();
@@ -62,67 +55,44 @@
         }
     }
 
-    function initializeStatusStream() {
-        if (!pageData.page_number) return;
-
-        eventSource?.close();
-        eventSource = new EventSource(
-            `${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/${pageData.page_number}/status`
-        );
-
-        eventSource.onmessage = async (event) => {
-            try {
-                const status = JSON.parse(event.data);
-                if (!status.error) {
-                    // Update the page data with the latest transcription
-                    const updatedData = await fetchUpdatedPageData();
-                    if (updatedData) {
-                        pageData = updatedData;
-                        isRetranscribing = false;
-                    }
-                }
-            } catch (error) {
-                console.error('Error processing status update:', error);
-            }
-        };
-
-        eventSource.onerror = () => {
-            console.error('Status stream error');
-            eventSource?.close();
-            eventSource = null;
-        };
-    }
-
-    async function retranscribePage() {
+    async function transcribePage() {
         if (!pageData.page_number) {
-            retranscribeError = 'Page number not available';
+            transcribeError = 'Page number not available';
             return;
         }
 
-        isRetranscribing = true;
-        retranscribeError = null;
+        isTranscribing = true;
+        transcribeError = null;
 
         try {
             const response = await fetch(
-                `${apiUrl}/manuscripts/${encodeURIComponent(title)}/pages/${pageData.page_number}/transcribe`, 
-                { method: 'POST' }
+                `${apiUrl}/manuscripts/${id}/pages/${pageData.page_number}/transcribe`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ notes: transcriptionNotes })
+                }
             );
             
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to retranscribe page');
+                throw new Error(errorData.error || 'Failed to transcribe page');
             }
 
-            // Initialize status stream to get updates
-            initializeStatusStream();
+            const result = await response.json();
+            if (result.data) {
+                pageData = result.data;
+            }
 
         } catch (error) {
-            retranscribeError = error instanceof Error ? error.message : 'An unknown error occurred';
-            isRetranscribing = false;
+            transcribeError = error instanceof Error ? error.message : 'An unknown error occurred';
+        } finally {
+            isTranscribing = false;
         }
     }
 
-    // Cleanup on component destruction
     onDestroy(() => {
         if (eventSource) {
             eventSource.close();
@@ -132,6 +102,7 @@
 </script>
 
 <svelte:window on:keydown={handleKeydown}/>
+
 <div 
     class="overlay"
     role="dialog"
@@ -155,7 +126,17 @@
         {#if pageData.transcription || pageData.revised_transcription}
             <section class="info-section">
                 <div class="section-header">
-                    <h3>Transcription</h3>
+                    <div class="header-content">
+                        <h3>Transcription</h3>
+                        {#if pageData.transcription_notes}
+                            <span 
+                                class="notes-indicator" 
+                                title={safeMarkdown(pageData.transcription_notes)}
+                            >
+                                i
+                            </span>
+                        {/if}
+                    </div>
                     {#if pageData.revised_transcription}
                         <button 
                             class="toggle-button" 
@@ -165,18 +146,31 @@
                         </button>
                     {/if}
                 </div>
-                <pre class="transcription">
-                    {formatTranscription(showRevised && pageData.revised_transcription 
-                        ? pageData.revised_transcription 
-                        : pageData.transcription)}
-                </pre>
+                <div class="transcription">
+                    {@html safeMarkdown(formatTranscription(
+                        showRevised && pageData.revised_transcription 
+                            ? pageData.revised_transcription 
+                            : pageData.transcription
+                    ))}
+                </div>
             </section>
         {/if}
 
         {#if pageData.summary}
             <section class="info-section">
                 <h3>Summary</h3>
-                <p>{pageData.summary}</p>
+                <div class="content-block">
+                    {@html safeMarkdown(pageData.summary)}
+                </div>
+            </section>
+        {/if}
+
+        {#if pageData.content_notes}
+            <section class="info-section">
+                <h3>Content Notes</h3>
+                <div class="content-block">
+                    {@html safeMarkdown(pageData.content_notes)}
+                </div>
             </section>
         {/if}
 
@@ -185,7 +179,7 @@
                 <h3>Marginalia</h3>
                 <ul class="marginalia-list">
                     {#each pageData.marginalia as note}
-                        <li>{note}</li>
+                        <li>{@html safeMarkdown(note)}</li>
                     {/each}
                 </ul>
             </section>
@@ -196,7 +190,7 @@
                 <h3>Keywords</h3>
                 <div class="keywords">
                     {#each pageData.keywords as keyword}
-                        <span class="keyword">{keyword}</span>
+                        <span class="keyword">{@html safeMarkdown(keyword)}</span>
                     {/each}
                 </div>
             </section>
@@ -208,22 +202,57 @@
             </div>
         {/if}
 
-        <div class="retranscribe-section">
+        <div class="transcribe-section">
+            <div class="notes-input">
+                <label for="transcription-notes">Notes for transcription (optional):</label>
+                <textarea
+                    id="transcription-notes"
+                    bind:value={transcriptionNotes}
+                    placeholder="Enter any notes or instructions for transcription..."
+                    rows="3"
+                ></textarea>
+            </div>
+
             <button 
-                class="retranscribe-button"
-                on:click={retranscribePage}
-                disabled={isRetranscribing}
+                class="transcribe-button"
+                on:click={transcribePage}
+                disabled={isTranscribing}
             >
-                {isRetranscribing ? 'Retranscribing...' : 'Retranscribe Page'}
+                {isTranscribing ? 'Transcribing...' : pageData.transcription ? 'Retranscribe Page' : 'Transcribe Page'}
             </button>
-            {#if retranscribeError}
-                <p class="error-message">{retranscribeError}</p>
+
+            {#if transcribeError}
+                <p class="error-message">{transcribeError}</p>
             {/if}
         </div>
     </div>
 </div>
 
 <style>
+    .header-content {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .notes-indicator {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #6b7280;
+        color: white;
+        font-size: 12px;
+        font-style: italic;
+        cursor: help;
+    }
+
+    .notes-indicator:hover {
+        background: #4b5563;
+    }
+    
     .overlay {
         position: fixed;
         top: 0;
@@ -285,15 +314,51 @@
         margin: 0;
     }
 
-    .transcription {
-        font-family: monospace;
-        white-space: pre-wrap;
+    .transcription, .content-block {
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
         background: #f5f5f5;
         padding: 1rem;
         border-radius: 4px;
-        margin: 0;
-        line-height: 1.5;
-        overflow-x: auto;  /* Allow horizontal scrolling if needed */
+        line-height: 1.6;
+        overflow-x: auto;
+    }
+
+    .transcription :global(p), .content-block :global(p) {
+        margin-bottom: 1rem;
+    }
+
+    .transcription :global(p:last-child), .content-block :global(p:last-child) {
+        margin-bottom: 0;
+    }
+
+    .transcription :global(em), .content-block :global(em) {
+        font-style: italic;
+    }
+
+    .transcription :global(strong), .content-block :global(strong) {
+        font-weight: 600;
+    }
+
+    .transcription :global(code), .content-block :global(code) {
+        background: #e5e7eb;
+        padding: 0.2em 0.4em;
+        border-radius: 3px;
+        font-family: ui-monospace, monospace;
+        font-size: 0.875em;
+    }
+
+    .transcription :global(ul), .content-block :global(ul) {
+        list-style-type: disc;
+        margin: 1rem 0;
+        padding-left: 1.5rem;
+    }
+
+    .transcription :global(blockquote), .content-block :global(blockquote) {
+        border-left: 4px solid #e5e7eb;
+        padding-left: 1rem;
+        margin: 1rem 0;
+        color: #4b5563;
+        font-style: italic;
     }
 
     .toggle-button {
@@ -337,6 +402,16 @@
         font-size: 0.875rem;
     }
 
+    .keyword :global(em) {
+        font-style: italic;
+    }
+
+    .keyword :global(code) {
+        background: rgba(0, 0, 0, 0.1);
+        padding: 0.1em 0.2em;
+        border-radius: 2px;
+    }
+
     .confidence {
         margin-top: 1rem;
         padding-top: 1rem;
@@ -344,29 +419,50 @@
         color: #666;
         font-size: 0.875rem;
     }
-    .retranscribe-section {
+
+    .transcribe-section {
         margin-top: 1rem;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        gap: 1rem;
     }
 
-    .retranscribe-button {
-        padding: 0.5rem 1rem;
+    .notes-input {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .notes-input label {
+        font-size: 0.875rem;
+        color: #4b5563;
+    }
+
+    .notes-input textarea {
+        width: 100%;
+        padding: 0.5rem;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        resize: vertical;
+        font-family: inherit;
+    }
+
+    .transcribe-button {
+        padding: 0.75rem 1rem;
         background: #4a9eff;
         color: white;
         border: none;
         border-radius: 4px;
         cursor: pointer;
         transition: background-color 0.2s;
-        margin-bottom: 0.5rem;
+        font-weight: 500;
     }
 
-    .retranscribe-button:hover:not(:disabled) {
+    .transcribe-button:hover:not(:disabled) {
         background: #3182ce;
     }
 
-    .retranscribe-button:disabled {
+    .transcribe-button:disabled {
         background: #9ca3af;
         cursor: not-allowed;
     }
