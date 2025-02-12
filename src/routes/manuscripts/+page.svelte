@@ -1,69 +1,180 @@
 <!-- src/routes/manuscripts/+page.svelte -->
 <script lang="ts">
     import { onMount, onDestroy } from 'svelte';
-    import { writable, type Writable } from 'svelte/store';
-    import SearchPanel from '$lib/components/SearchPanel.svelte';
-    import ManuscriptTable from '$lib/components/ManuscriptTable.svelte';
-	import type { Manuscript, ManuscriptListing } from '$lib/types';
+    import type { ManuscriptMetadata, TranscriptionStatus } from '$lib/types/manuscript';
+    import type { SearchQuery } from '$lib/services/catalogue.search.service';
+    import { manuscriptService } from '$lib/services/manuscript.service';
+    import { catalogueSearchService } from '$lib/services/catalogue.search.service';
+    import CatalogueSearch from '$lib/components/catalogue/CatalogueSearch.svelte';
+    import ManuscriptTable from '$lib/components/catalogue/ManuscriptTable.svelte';
 
-    const manuscriptsStore: Writable<ManuscriptListing[]> = writable([]);
-    const displayedStore: Writable<ManuscriptListing[]> = writable([]);
+    let manuscripts: ManuscriptMetadata[] = [];
+    let displayedManuscripts: ManuscriptMetadata[] = [];
     let loading = true;
     let error: string | null = null;
-    
-    const apiUrl = 'http://127.0.0.1:5000';
+    let statusSubscriptions = new Map<string, () => void>();
+    let currentSearchQuery: SearchQuery | null = null;
+
+    async function loadManuscripts() {
+        try {
+            const manuscriptData = await manuscriptService.getManuscripts();
+            manuscripts = Object.values(manuscriptData);
+            
+            // Apply existing search if there is one
+            if (currentSearchQuery) {
+                displayedManuscripts = catalogueSearchService.search(manuscripts, currentSearchQuery);
+            } else {
+                displayedManuscripts = [...manuscripts];
+            }
+
+            // Set up subscriptions for manuscripts being transcribed
+            manuscripts.forEach(manuscript => {
+                if (manuscript.transcription_status?.status === 'in_progress') {
+                    subscribeToManuscript(manuscript.id);
+                }
+            });
+        } catch (e) {
+            error = e instanceof Error ? e.message : 'Failed to load manuscripts';
+            console.error('Error loading manuscripts:', e);
+        }
+    }
+
+    function handleSearch(event: CustomEvent<SearchQuery>) {
+        const searchQuery = event.detail;
+        currentSearchQuery = searchQuery;
+        
+        // Always process the search, even with no conditions (might have free text)
+        displayedManuscripts = catalogueSearchService.search(manuscripts, searchQuery);
+    }
+
+    function subscribeToManuscript(manuscriptId: string) {
+        // Clean up existing subscription if any
+        statusSubscriptions.get(manuscriptId)?.();
+        
+        const cleanup = manuscriptService.subscribeToStatus(
+            manuscriptId,
+            (status: TranscriptionStatus) => {
+                updateManuscriptStatus(manuscriptId, status);
+            }
+        );
+        
+        statusSubscriptions.set(manuscriptId, cleanup);
+    }
+
+    function updateManuscriptStatus(manuscriptId: string, status: TranscriptionStatus) {
+        manuscripts = manuscripts.map(m => 
+            m.id === manuscriptId
+                ? {
+                    ...m,
+                    transcribed_pages: status.transcribed_pages,
+                    transcription_status: { ...m.transcription_status, ...status }
+                  }
+                : m
+        );
+        
+        // Update displayed manuscripts to match
+        displayedManuscripts = displayedManuscripts.map(m =>
+            m.id === manuscriptId ? manuscripts.find(orig => orig.id === manuscriptId)! : m
+        );
+
+        // If transcription is complete or failed, clean up the subscription
+        if (status.status === 'completed' || status.status === 'error') {
+            statusSubscriptions.get(manuscriptId)?.();
+            statusSubscriptions.delete(manuscriptId);
+        }
+    }
 
     onMount(async () => {
         try {
-            const response = await fetch(`${apiUrl}/manuscripts`);
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            const data = await response.json();
-            manuscriptsStore.set(data);
-            displayedStore.set(data);
-        } catch (e) {
-            error = e instanceof Error ? e.message : 'An unknown error occurred';
-            console.error("Error fetching manuscripts:", error);
+            await loadManuscripts();
         } finally {
             loading = false;
         }
     });
 
-    function handleSimilarityResults(event: CustomEvent) {
-        const { manuscripts, sourceTitle } = event.detail;
-        displayedStore.set(manuscripts);
-        // TODO: Update search panel to show similarity tag
-    }
-
-    $: manuscripts = $manuscriptsStore;
-    $: displayedManuscripts = $displayedStore;
+    onDestroy(() => {
+        // Clean up all subscriptions
+        statusSubscriptions.forEach(cleanup => cleanup());
+        statusSubscriptions.clear();
+    });
 </script>
 
 <div class="container">
     {#if loading}
-        <p>Loading manuscripts...</p>
+        <div class="loading">Loading manuscripts...</div>
     {:else if error}
-        <p class="error">Error: {error}</p>
+        <div class="error">Error: {error}</div>
     {:else}
-        <SearchPanel
-            {manuscripts}
-            on:update={(event) => displayedStore.set(event.detail.manuscripts)}
+        <CatalogueSearch 
+            on:search={handleSearch}
+            totalManuscripts={manuscripts.length}
+            matchingManuscripts={displayedManuscripts.length}
         />
-        <ManuscriptTable 
-            manuscripts={displayedManuscripts}
-            on:similarity={handleSimilarityResults}
-        />
+        {#if displayedManuscripts.length === 0}
+            <div class="no-results">
+                <p>No manuscripts found matching your search criteria.</p>
+                {#if currentSearchQuery}
+                    <button 
+                        class="clear-search"
+                        on:click={() => handleSearch(new CustomEvent('search', { 
+                            detail: catalogueSearchService.parseQuery('')
+                        }))}
+                    >
+                        Clear Search
+                    </button>
+                {/if}
+            </div>
+        {:else}
+            <ManuscriptTable 
+                manuscripts={displayedManuscripts} 
+                onTranscriptionStart={subscribeToManuscript}
+            />
+        {/if}
     {/if}
 </div>
 
 <style>
+
     .container {
-        padding: 0 2rem;
-        margin: 0 auto;
         max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .loading {
+        text-align: center;
+        padding: 2rem;
+        color: #666;
     }
 
     .error {
-        color: red;
-        padding: 1em;
+        color: #dc2626;
+        padding: 1rem;
+        background: #fee2e2;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+
+    .no-results {
+        text-align: center;
+        padding: 2rem;
+        background: #f9fafb;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
+    }
+
+    .clear-search {
+        margin-top: 1rem;
+        padding: 0.5rem 1rem;
+        background: #4a9eff;
+        color: white;
+        border: none;
+        border-radius: 0.25rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .clear-search:hover {
+        background: #2563eb;
     }
 </style>

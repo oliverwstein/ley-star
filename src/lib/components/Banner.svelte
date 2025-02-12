@@ -37,10 +37,9 @@
   }
 
   img {
-    height: 3rem;
-    width: 3rem;
+    height: 6rem;
+    width: 6rem;
     flex-shrink: 0;
-    filter: brightness(1.2) drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
   }
 
   h1 {
