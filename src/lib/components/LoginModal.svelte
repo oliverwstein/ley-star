@@ -79,8 +79,8 @@
     }
 </script>
 
-<!-- svelte-ignore a11y-click-events-have-key-events -->
 <div 
+    role="presentation"
     class="modal-overlay" 
     on:click|self={() => dispatch('close')}
     on:keydown={handleKeydown}
@@ -103,16 +103,25 @@
                     placeholder="Enter admin password"
                     disabled={isLoading}
                     required
+                    aria-describedby={error ? 'login-error' : undefined}
                 />
             </div>
             
             {#if error}
-                <div class="error-message">{error}</div>
+                <div 
+                    id="login-error" 
+                    class="error-message" 
+                    role="alert"
+                    aria-live="assertive"
+                >
+                    {error}
+                </div>
             {/if}
             
             <button 
                 type="submit" 
                 disabled={isLoading}
+                aria-busy={isLoading}
             >
                 {#if isLoading}
                     Logging in...
