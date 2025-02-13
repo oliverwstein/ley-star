@@ -41,4 +41,21 @@
       .spacing {
           margin-top: 2rem; /* Adds spacing between Banner and InfoBox */
       }
+      :global(body) {
+        font-family: 'EB Garamond', serif;
+        font-size: 1.125rem;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    :global(h1, h2, h3, h4, h5, h6) {
+        font-family: 'EB Garamond', serif;
+        font-weight: 500;
+        line-height: 1.2;
+    }
+
+    :global(button, input, select, textarea) {
+        font-family: 'EB Garamond', serif;
+    }
   </style>

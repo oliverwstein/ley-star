@@ -1,38 +1,34 @@
 <!-- src/routes/+page.svelte -->
 <script lang="ts">
     import { onMount } from 'svelte';
-    import InfoBox from '$lib/components/InfoBox.svelte';
-  
-    const apiUrl = 'http://127.0.0.1:5000';
+    import InfoBox from '$lib/components/SplashBox.svelte';
+    import { manuscriptService } from '$lib/services/manuscript.service';
   
     let serverConnected: boolean = false;
     let loading: boolean = true;
   
     onMount(async () => {
-      try {
-        if (!apiUrl) {
-          throw new Error('API_URL environment variable not found');
+        try {
+            serverConnected = await manuscriptService.testConnection();
+        } catch (e) {
+            console.error("Error connecting to server:", 
+                e instanceof Error ? e.message : String(e));
+            serverConnected = false;
+        } finally {
+            loading = false;
         }
-        const response = await fetch(`${apiUrl}/`);
-        if (response.ok) {
-          serverConnected = true;
-        }
-      } catch (e: any) {
-        console.error("Error connecting to server:", e.message);
-      }
-      loading = false;
     });
 </script>
   
 <main class="container">
-  <InfoBox {serverConnected} />
+    <InfoBox {serverConnected} {loading} />
 </main>
 
 <style>
-  .container {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+    .container {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 </style>
