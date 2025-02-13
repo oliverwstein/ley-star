@@ -524,12 +524,6 @@
         margin-bottom: 1.5rem;
     }
 
-    .text-block h4 {
-        color: #4b5563;
-        margin: 0 0 0.5rem 0;
-        font-size: 1rem;
-    }
-
     .text-content {
         white-space: pre-wrap;
         font-family: 'EB Garamond', serif;
@@ -544,14 +538,6 @@
 
     .content-section {
         margin-bottom: 1.5rem;
-    }
-
-    .content-section h4 {
-        color: #4b5563;
-        margin: 0 0 0.5rem 0;
-        font-size: 0.875rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
     }
 
     .content-section ul {
