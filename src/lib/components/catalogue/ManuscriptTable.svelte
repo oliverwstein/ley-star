@@ -104,6 +104,8 @@
                 return 'Failed';
             case 'queued':
                 return 'Queued';
+            case 'requested':
+                return 'Requested';
             default:
                 return 'Start Transcription';
         }
@@ -197,11 +199,13 @@
                             </div>
                             <button
                                 class="transcribe-button"
-                                class:in-progress={manuscript.transcription_status?.status === 'in_progress' || manuscript.transcription_status?.status === 'queued'}
+                                class:in-progress={manuscript.transcription_status?.status === 'in_progress' || manuscript.transcription_status?.status === 'queued' || manuscript.transcription_status?.status === 'requested'}
                                 class:complete={manuscript.transcription_status?.status === 'completed'}
                                 class:error={manuscript.transcription_status?.status === 'error'}
                                 disabled={manuscript.transcription_status?.status === 'completed' || 
-                                        manuscript.transcription_status?.status === 'in_progress' || manuscript.transcription_status?.status === 'queued'}
+                                        manuscript.transcription_status?.status === 'in_progress' || 
+                                        manuscript.transcription_status?.status === 'queued' || 
+                                        manuscript.transcription_status?.status === 'requested'}
                                 on:click={() => handleTranscribe(manuscript)}
                             >
                                 {getTranscribeButtonText(manuscript.transcription_status?.status ?? 'not_started')}
@@ -342,6 +346,7 @@
 
     .progress-bar {
         position: absolute;
+        border-radius: 8px;
         height: 100%;
         background: #4a9eff;
         transition: width 0.5s ease-out;
