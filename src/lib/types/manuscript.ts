@@ -90,7 +90,6 @@ export interface PageTranscription {
 export interface PageData {
     page_number: number;
     transcription?: PageTranscription;
-    confidence?: number;
 }
 
 export interface TableOfContentsEntry {
