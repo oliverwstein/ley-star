@@ -3,7 +3,6 @@
     import { onMount, onDestroy } from 'svelte';
     import { manuscriptService } from '$lib/services/manuscript.service';
     import type { Manuscript } from '$lib/types/manuscript';
-
     export let manuscript: Manuscript;
     
     let currentPage = 1;
@@ -17,6 +16,8 @@
     let visibleRangeStart = 1;
     let visibleRangeEnd = 1;
     let loadBuffer = 10; // Number of pages to load on each side of visible range
+    // Get current page transcription
+    
 
     // Load image URLs for a range of pages
     async function loadPageRange(start: number, end: number) {
@@ -147,7 +148,9 @@
     });
 
     // Get transcription status for current page
-    $: currentPageTranscribed = manuscript.pages?.[currentPage] !== undefined;
+    $: currentTranscription = manuscript.pages?.[currentPage]?.transcription;
+    $: currentPageTranscribed = !!currentTranscription;
+    console.log(manuscript.pages?.[currentPage]);
 </script>
 
 <div class="page-navigation">
@@ -233,26 +236,103 @@
         </div>
     </div>
 
-    <div class="large-page-view">
-        {#if loadedImages.has(currentPage)}
-            <div class="page-status">
-                <span>Page {currentPage}</span>
-                {#if currentPageTranscribed}
-                    <span class="transcribed-badge">Transcribed</span>
+    <!-- Page Content -->
+    <div class="page-content">
+        <div class="page-status">
+            <span>Page {currentPage}</span>
+            {#if currentPageTranscribed}
+                <span class="transcribed-badge">Transcribed</span>
+            {/if}
+        </div>
+
+        <div class="content-container">
+            <!-- Image Section -->
+            <div class="image-section">
+                {#if loadedImages.has(currentPage)}
+                    <img
+                        src={loadedImages.get(currentPage)}
+                        alt={`Large view of page ${currentPage}`}
+                        class="large-page-image"
+                    />
+                {:else}
+                    <div class="loading-placeholder">
+                        Loading page {currentPage}...
+                    </div>
                 {/if}
             </div>
-            <div class="page-image-container">
-                <img
-                    src={loadedImages.get(currentPage)}
-                    alt={`Large view of page ${currentPage}`}
-                    class="large-page-image"
-                />
-            </div>
-        {:else}
-            <div class="loading-placeholder">
-                Loading page {currentPage}...
-            </div>
-        {/if}
+
+            <!-- Transcription Section -->
+            {#if currentTranscription}
+                <div class="transcription-section">
+                    {#if currentTranscription.body?.length}
+                        <h2>Transcription</h2>
+                        <!-- Main Text Blocks -->
+                        <div class="text-blocks">
+                            {#each currentTranscription.body as section}
+                                <div class="text-block">
+                                    <div class="text-content" title={currentTranscription.transcription_notes}>
+                                        {section.text.replace(/\|/g, "\n")}
+                                    </div>
+                                </div>
+                            {/each}
+                        </div>
+                    {/if}
+
+                    <!-- Additional Content -->
+                    {#if currentTranscription.marginalia?.length || currentTranscription.notes?.length || currentTranscription.illustrations?.length}
+                        <div class="additional-content">
+                            {#if currentTranscription.marginalia?.length}
+                                <div class="content-section">
+                                    <h3>Marginalia</h3>
+                                    <ul>
+                                        {#each currentTranscription.marginalia as note}
+                                            <li>
+                                                <strong>{note.location}:</strong> {note.text.replace(/\|/g, "\n")}
+                                                {#if note.hand}
+                                                    <em>(Hand: {note.hand})</em>
+                                                {/if}
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                </div>
+                            {/if}
+
+                            {#if currentTranscription.notes?.length}
+                                <div class="content-section">
+                                    <h3>Notes</h3>
+                                    <ul>
+                                        {#each currentTranscription.notes as note}
+                                            <li>
+                                                <strong>{note.type}:</strong> {note.text.replace(/\|/g, "\n")}
+                                                {#if note.location}
+                                                    <em>({note.location})</em>
+                                                {/if}
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                </div>
+                            {/if}
+
+                            {#if currentTranscription.illustrations?.length}
+                                <div class="content-section">
+                                    <h3>Illustrations</h3>
+                                    <ul>
+                                        {#each currentTranscription.illustrations as illustration}
+                                            <li>
+                                                <strong>{illustration.location}:</strong> {illustration.description}
+                                                {#if illustration.dimensions}
+                                                    <em>({illustration.dimensions})</em>
+                                                {/if}
+                                            </li>
+                                        {/each}
+                                    </ul>
+                                </div>
+                            {/if}
+                        </div>
+                    {/if}
+                </div>
+            {/if}
+        </div>
     </div>
 </div>
 
@@ -372,12 +452,6 @@
         border-radius: 2px;
     }
 
-    .large-page-view {
-        margin-top: 2rem;
-        border-top: 1px solid #e5e7eb;
-        padding-top: 1rem;
-    }
-
     .page-status {
         display: flex;
         justify-content: space-between;
@@ -392,16 +466,6 @@
         padding: 0.25rem 0.75rem;
         border-radius: 9999px;
         font-size: 0.875rem;
-    }
-
-    .page-image-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: #f3f4f6;
-        border-radius: 4px;
-        padding: 1rem;
-        min-height: 400px;
     }
 
     .large-page-image {
@@ -420,4 +484,115 @@
         color: #6b7280;
         border-radius: 4px;
     }
+    .page-content {
+        margin-top: 2rem;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 1rem;
+    }
+
+    .content-container {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 2rem;
+        align-items: start;
+    }
+
+    .image-section {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        background: #f3f4f6;
+        border-radius: 4px;
+        padding: 1rem;
+        min-height: 400px;
+    }
+
+    .transcription-section {
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: 4px;
+        border: 1px solid #e5e7eb;
+        max-height: 800px;
+        overflow-y: auto;
+    }
+
+    .text-blocks {
+        margin-bottom: 2rem;
+    }
+
+    .text-block {
+        margin-bottom: 1.5rem;
+    }
+
+    .text-block h4 {
+        color: #4b5563;
+        margin: 0 0 0.5rem 0;
+        font-size: 1rem;
+    }
+
+    .text-content {
+        white-space: pre-wrap;
+        font-family: 'EB Garamond', serif;
+        line-height: 1.6;
+        cursor: help;
+    }
+
+    .additional-content {
+        border-top: 1px solid #e5e7eb;
+        padding-top: 1rem;
+    }
+
+    .content-section {
+        margin-bottom: 1.5rem;
+    }
+
+    .content-section h4 {
+        color: #4b5563;
+        margin: 0 0 0.5rem 0;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .content-section ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .content-section li {
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+
+    .content-section strong {
+        color: #4b5563;
+    }
+
+    .content-section em {
+        color: #6b7280;
+        font-style: italic;
+        margin-left: 0.5rem;
+    }
+
+    /* Scrollbar styling for transcription section */
+    .transcription-section::-webkit-scrollbar {
+        width: 8px;
+    }
+
+    .transcription-section::-webkit-scrollbar-track {
+        background: #f3f4f6;
+        border-radius: 4px;
+    }
+
+    .transcription-section::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+    }
+
+    .transcription-section::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+
 </style>
