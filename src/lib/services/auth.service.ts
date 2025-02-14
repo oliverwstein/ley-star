@@ -2,8 +2,7 @@
 import { writable } from 'svelte/store';
 
 // Get the API base URL from environment variables
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 /**
  * Represents the current authentication state
  */
@@ -21,15 +20,59 @@ export interface AuthState {
  */
 function createAuthService() {
     // Create a writable store with initial authentication state
-    const { subscribe, set } = writable<AuthState>({
+    const { subscribe, set, update } = writable<AuthState>({
         isAdmin: false,
         isLoading: false,
         error: null
     });
 
+    // Check authentication status on initialization
+    async function checkAuthStatus() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/admin/status`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                set({
+                    isAdmin: data.is_admin === true,
+                    isLoading: false,
+                    error: null
+                });
+                return data.is_admin === true;
+            }
+
+            // Not authenticated or error
+            set({
+                isAdmin: false,
+                isLoading: false,
+                error: null
+            });
+            return false;
+        } catch (error) {
+            console.error('Error checking auth status:', error);
+            set({
+                isAdmin: false,
+                isLoading: false,
+                error: null
+            });
+            return false;
+        }
+    }
+
+    // Initial check
+    checkAuthStatus();
+
     return {
         // Allow components to subscribe to authentication state changes
         subscribe,
+
+        /**
+         * Check the current authentication status
+         */
+        checkAuthStatus,
 
         /**
          * Attempt to log in with admin password

@@ -10,6 +10,7 @@
     onMount(async () => {
         try {
             serverConnected = await manuscriptService.testConnection();
+            console.log('API URL:', import.meta.env.VITE_API_URL);
         } catch (e) {
             console.error("Error connecting to server:", 
                 e instanceof Error ? e.message : String(e));
