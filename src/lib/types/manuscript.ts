@@ -46,7 +46,7 @@ export interface PhysicalDescription {
 }
 
 export interface TranscriptionStatus {
-    status: 'not_started' | 'in_progress' | 'partial' | 'completed' | 'error' | 'queued';
+    status: 'not_started' | 'in_progress' | 'partial' | 'completed' | 'error' | 'queued' | 'requested';
     transcribed_pages: number;
     total_pages: number;
     successful_pages?: number;

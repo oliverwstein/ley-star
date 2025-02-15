@@ -150,7 +150,6 @@
     // Get transcription status for current page
     $: currentTranscription = manuscript.pages?.[currentPage]?.transcription;
     $: currentPageTranscribed = !!currentTranscription;
-    console.log(manuscript.pages?.[currentPage]);
 </script>
 
 <div class="page-navigation">
@@ -271,7 +270,7 @@
                             {#each currentTranscription.body as section}
                                 <div class="text-block">
                                     <div class="text-content" title={currentTranscription.transcription_notes}>
-                                        {section.text.replace(/\|/g, "\n")}
+                                        {section.text.replace(/\|/g, "\n").replace(/<br\s*\/?>/g, "\n")}
                                     </div>
                                 </div>
                             {/each}

@@ -50,16 +50,21 @@ export class ManuscriptService {
     }
 
     private initializeWebSocket() {
-        const wsUrl = API_URL.replace(/^http/, 'ws') + '/ws';
+        const wsUrl = API_URL.replace(/^http/, 'ws').replace(/^https/, 'wss') + '/ws';
         this.socket = new WebSocket(wsUrl);
-
+    
+        // Add error handling and logging
         this.socket.onopen = () => {
+            console.log('WebSocket connection established');
             this.reconnectAttempts = 0;
-            // Send any queued messages
             while (this.messageQueue.length > 0) {
                 const msg = this.messageQueue.shift();
                 this.sendMessage(msg);
             }
+        };
+    
+        this.socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
         };
 
         this.socket.onmessage = (event) => {
@@ -220,6 +225,7 @@ export class ManuscriptService {
             {
                 ...API_CONFIG,
                 method: 'POST',
+                credentials: 'include',
                 headers: API_CONFIG.defaultHeaders,
                 body: JSON.stringify({
                     notes: options.notes || '',
