@@ -225,6 +225,7 @@ export class ManuscriptService {
             {
                 ...API_CONFIG,
                 method: 'POST',
+                credentials: 'include',
                 headers: API_CONFIG.defaultHeaders,
                 body: JSON.stringify({
                     notes: options.notes || '',
