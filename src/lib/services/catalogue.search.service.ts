@@ -199,7 +199,6 @@ export class CatalogueSearchService {
 
         // Collect free text for TF-IDF scoring
         freeText = textParts.join(' ').trim();
-        console.log(freeText);
         return {
             rawQuery: queryString,
             conditions,
@@ -304,11 +303,6 @@ export class CatalogueSearchService {
             }))
             .filter(item => item.score > 0)  // Only keep non-zero scores
             .sort((a, b) => b.score - a.score);
-    
-        console.log('Scored results:', scored.map(({manuscript, score}) => ({
-            title: manuscript.title,
-            score
-        })));
     
         return scored.map(result => result.manuscript);
     }
@@ -562,7 +556,6 @@ export class CatalogueSearchService {
 
     private calculateSimilarity(vec1: DocumentVector, vec2: DocumentVector): number {
         let dotProduct = 0;
-        console.log(vec2);
         // Calculate dot product with fuzzy matching
         for (const term1 in vec1.terms) {
             const [field1, value1] = term1.split(':');
