@@ -2,12 +2,13 @@
 <script lang="ts">
     import { manuscriptService } from '$lib/services/manuscript.service';
     import type { ManuscriptMetadata } from '$lib/types/manuscript';
+	import TranscriptionButton from '../TranscriptionButton.svelte';
     
     export let manuscripts: ManuscriptMetadata[] = [];
     export let onTranscriptionStart: (manuscriptId: string) => void;
 
     type SortField = 'title' | 'total_pages' | 'transcribed_pages' | 'date' | 'search_order';
-    let sortField: SortField = 'search_order';  // Initial value
+    let sortField: SortField = 'search_order';
     let sortDirection: 'asc' | 'desc' = 'asc';
 
     function toggleSort(field: SortField) {
@@ -70,7 +71,7 @@
                 bVal = b.total_pages;
                 break;
             default:
-                aVal = a.title;  // Fallback to title if somehow we get an unknown sort field
+                aVal = a.title;
                 bVal = b.title;
         }
         
@@ -79,36 +80,8 @@
 
     // Reset sort when manuscripts change
     $: {
-        manuscripts;  // track changes to manuscripts
-        sortField = 'search_order';  // reset to search order when new results arrive
-    }
-
-    async function handleTranscribe(manuscript: ManuscriptMetadata) {
-        try {
-            const response = await manuscriptService.startTranscription(manuscript.id);
-            if (response.status === 'started') {
-                onTranscriptionStart(manuscript.id);
-            }
-        } catch (error) {
-            console.error('Failed to start transcription:', error);
-        }
-    }
-
-    function getTranscribeButtonText(status: string): string {
-        switch (status) {
-            case 'in_progress':
-                return 'In Progress';
-            case 'completed':
-                return 'Complete';
-            case 'error':
-                return 'Failed';
-            case 'queued':
-                return 'Queued';
-            case 'requested':
-                return 'Requested';
-            default:
-                return 'Start Transcription';
-        }
+        manuscripts;
+        sortField = 'search_order';
     }
 </script>
 
@@ -197,19 +170,11 @@
                                     <div class="error-indicator">⚠️ Error</div>
                                 {/if}
                             </div>
-                            <button
-                                class="transcribe-button"
-                                class:in-progress={manuscript.transcription_status?.status === 'in_progress' || manuscript.transcription_status?.status === 'queued' || manuscript.transcription_status?.status === 'requested'}
-                                class:complete={manuscript.transcription_status?.status === 'completed'}
-                                class:error={manuscript.transcription_status?.status === 'error'}
-                                disabled={manuscript.transcription_status?.status === 'completed' || 
-                                        manuscript.transcription_status?.status === 'in_progress' || 
-                                        manuscript.transcription_status?.status === 'queued' || 
-                                        manuscript.transcription_status?.status === 'requested'}
-                                on:click={() => handleTranscribe(manuscript)}
-                            >
-                                {getTranscribeButtonText(manuscript.transcription_status?.status ?? 'not_started')}
-                            </button>
+                            <TranscriptionButton
+                                manuscriptId={manuscript.id}
+                                status={manuscript.transcription_status?.status ?? 'not_started'}
+                                {onTranscriptionStart}
+                            />
                         </td>
                     </tr>
                 {/each}
@@ -342,6 +307,7 @@
         height: 1.5rem;
         background: #f3f4f6;
         border-radius: 0.25rem;
+        margin-bottom: 1.5rem;
     }
 
     .progress-bar {
@@ -383,41 +349,5 @@
         color: #666;
         font-size: 0.875rem;
         margin-top: 0.5rem;
-    }
-
-    .transcribe-button {
-        width: 100%;
-        margin-top: 1.5rem;
-        padding: 0.25rem 0.5rem;
-        border: 1px solid #e5e7eb;
-        border-radius: 0.25rem;
-        font-size: 0.875rem;
-        transition: all 0.2s;
-        background-color: #4a9eff;
-        color: white;
-        cursor: pointer;
-    }
-
-    .transcribe-button:disabled {
-        cursor: not-allowed;
-    }
-
-    .transcribe-button.in-progress {
-        background-color: #9ca3af;
-        color: white;
-    }
-
-    .transcribe-button.complete {
-        background-color: #d1d5db;
-        color: #6b7280;
-    }
-
-    .transcribe-button.error {
-        background-color: #ef4444;
-        color: white;
-    }
-
-    .transcribe-button:hover:not(:disabled) {
-        opacity: 0.9;
     }
 </style>
