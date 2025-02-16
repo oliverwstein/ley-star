@@ -1,27 +1,27 @@
 <!-- src/lib/components/Banner.svelte -->
 <script lang="ts">
     import { onMount } from 'svelte';
-    import LoginModal from './LoginModal.svelte';
-    import { authService } from '$lib/services/auth.service';
+    // import LoginModal from './LoginModal.svelte';
+    // import { authService } from '$lib/services/auth.service';
   
-    let isAdmin = false;
-    let showLoginModal = false;
+    // let isAdmin = false;
+    // let showLoginModal = false;
   
-    onMount(() => {
-      const unsubscribe = authService.subscribe(state => {
-        isAdmin = state.isAdmin;
-      });
+    // onMount(() => {
+    //   const unsubscribe = authService.subscribe(state => {
+    //     isAdmin = state.isAdmin;
+    //   });
   
-      return unsubscribe;
-    });
+    //   return unsubscribe;
+    // });
   
-    async function handleAuthAction() {
-      if (isAdmin) {
-        await authService.logout();
-      } else {
-        showLoginModal = true;
-      }
-    }
+    // async function handleAuthAction() {
+    //   if (isAdmin) {
+    //     await authService.logout();
+    //   } else {
+    //     showLoginModal = true;
+    //   }
+    // }
   </script>
   
   <svelte:head>
@@ -34,21 +34,21 @@
         <img src="/icon.png" alt="Leyster Logo" />
         <h1>Leystar</h1>
         <slot></slot>
-        <button 
+        <!-- <button 
           class="auth-button" 
           on:click={handleAuthAction}
         >
           {isAdmin ? 'Logout' : 'Login'}
-        </button>
+        </button> -->
       </div>
     </header>
   </div>
   
-  {#if !isAdmin && showLoginModal}
+  <!-- {#if !isAdmin && showLoginModal}
     <LoginModal 
       on:close={() => showLoginModal = false}
     />
-  {/if}
+  {/if} -->
   
   <style>
     .banner-wrapper {
